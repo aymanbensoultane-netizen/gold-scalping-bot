@@ -12,37 +12,59 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def send_telegram(message):
-    url = "https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
-    try:
-        resp = requests.post(url, json=payload, timeout=10)
-        resp.raise_for_status()
-        return True
-    except Exception as e:
-        logger.error("Erreur: " + str(e))
-        return False
+def envoyer_telegram(message):
+url = "https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendMessage"
+payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
+try:
+resp = requests.post(url, json=payload, timeout=10)
+resp.raise_for_status()
+return True
+except Exception as e:
+logger.error("Erreur : " + str(e))
+return False
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    try:
-        data = json.loads(request.get_data(as_text=True))
-        signal = data.get("signal", "").upper()
-        if signal not in ("BUY", "SELL"):
-            return jsonify({"error": "invalide"}), 400
-        send_telegram("SIGNAL " + signal + " XAUUSD\nPrix: " + data.get("price","?"))
-        return jsonify({"status": "ok"}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+try:
+donnees = json.loads(request.get_data(as_text=True))
+signal = donnees.get("signal", "").upper()
+if signal not in ("BUY", "SELL"):
+return jsonify({"erreur": "invalide"}), 400
+
+prix = float(donnees.get("price", 0))
+
+# Calcul TP/SL automatique (ATR simulé ~2.5 points sur Gold 5M)
+atr = 2.5
+if signal == "BUY":
+tp = round(prix + (atr * 2), 3)
+sl = round(prix - (atr * 1), 3)
+emoji = "🟢"
+else:
+tp = round(prix - (atr * 2), 3)
+sl = round(prix + (atr * 1), 3)
+emoji = "🔴"
+
+message = (
+f"{emoji} SIGNAL {signal} XAUUSD\n"
+f"💰 Prix : {prix}\n"
+f"✅ TP : {tp}\n"
+f"❌ SL : {sl}\n"
+f"📊 Ratio R/R : 1:2"
+)
+
+envoyer_telegram(message)
+return jsonify({"statut": "ok"}), 200
+except Exception as e:
+return jsonify({"erreur": str(e)}), 500
 
 @app.route("/test", methods=["GET"])
 def test():
-    send_telegram("Bot Gold actif!")
-    return jsonify({"status": "ok"}), 200
+envoyer_telegram("Bot Gold actif !")
+return jsonify({"statut": "ok"}), 200
 
 @app.route("/", methods=["GET"])
-def home():
-    return jsonify({"status": "en ligne"}), 200
+def maison():
+return jsonify({"statut": "en ligne"}), 200
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=PORT, debug=False)
+app.run(host="0.0.0.0", port=PORT, debug=False)
