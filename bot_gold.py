@@ -27,7 +27,7 @@ import requests
 
  TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")    # Via @BotFather sur Telegram
  TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")   # Via @userinfobot sur Telegram
-PORT             = 5000                         # Port du serveur webhook
+PORT = int(os.environ.get("PORT", 5000)) # Port du serveur webhook
 SECRET_KEY       = “goldscalping2024”           # Clé secrète (optionnel)
 
 # ═══════════════════════════════════════
