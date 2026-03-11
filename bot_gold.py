@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-from datetime import datetime
 from flask import Flask, request, jsonify
 import requests
 
