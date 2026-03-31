@@ -32,6 +32,14 @@ if signal not in ("BUY", "SELL"):
 return jsonify({"erreur": "invalide"}), 400
 
 prix = float(donnees.get("price", 0))
+from datetime import datetime, timezone
+heure_utc = datetime.now(timezone.utc).hour
+london = 7 <= heure_utc < 12
+newyork = 13 <= heure_utc < 20
+session_active = london or newyork
+
+if not session_active:
+    return jsonify({"statut": "hors session"}), 200
 
 # Calcul TP/SL automatique (ATR simulé ~2.5 points sur Gold 5M)
 atr = 2.5
