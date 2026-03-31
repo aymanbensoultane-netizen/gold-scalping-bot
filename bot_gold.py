@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from flask import Flask, request, jsonify
 import requests
 
@@ -13,66 +14,71 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def envoyer_telegram(message):
-url = "https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendMessage"
-payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
-try:
-resp = requests.post(url, json=payload, timeout=10)
-resp.raise_for_status()
-return True
-except Exception as e:
-logger.error("Erreur : " + str(e))
-return False
+    url = "https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
+    try:
+        resp = requests.post(url, json=payload, timeout=10)
+        resp.raise_for_status()
+        return True
+    except Exception as e:
+        logger.error("Erreur : " + str(e))
+        return False
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-try:
-donnees = json.loads(request.get_data(as_text=True))
-signal = donnees.get("signal", "").upper()
-if signal not in ("BUY", "SELL"):
-return jsonify({"erreur": "invalide"}), 400
+    try:
+        donnees = json.loads(request.get_data(as_text=True))
+        signal = donnees.get("signal", "").upper()
+        if signal not in ("BUY", "SELL"):
+            return jsonify({"erreur": "invalide"}), 400
 
-prix = float(donnees.get("price", 0))
-from datetime import datetime, timezone
-heure_utc = datetime.now(timezone.utc).hour
-london = 7 <= heure_utc < 12
-newyork = 13 <= heure_utc < 20
-session_active = london or newyork
+        # FILTRE SESSION
+        heure_utc = datetime.now(timezone.utc).hour
+        london = 7 <= heure_utc < 12
+        newyork = 13 <= heure_utc < 20
+        if not (london or newyork):
+            return jsonify({"statut": "hors session"}), 200
 
-if not session_active:
-    return jsonify({"statut": "hors session"}), 200
+        prix = float(donnees.get("price", 0))
+        
+        # TP/SL ADAPTES 2 LOTS FTMO
+        sl_points = 25
+        tp1_points = 50
+        tp2_points = 100
 
-# Calcul TP/SL automatique (ATR simulé ~2.5 points sur Gold 5M)
-atr = 2.5
-if signal == "BUY":
-tp = round(prix + (atr * 2), 3)
-sl = round(prix - (atr * 1), 3)
-emoji = "🟢"
-else:
-tp = round(prix - (atr * 2), 3)
-sl = round(prix + (atr * 1), 3)
-emoji = "🔴"
+        if signal == "BUY":
+            sl = round(prix - sl_points, 3)
+            tp1 = round(prix + tp1_points, 3)
+            tp2 = round(prix + tp2_points, 3)
+            emoji = "🟢"
+        else:
+            sl = round(prix + sl_points, 3)
+            tp1 = round(prix - tp1_points, 3)
+            tp2 = round(prix - tp2_points, 3)
+            emoji = "🔴"
 
-message = (
-f"{emoji} SIGNAL {signal} XAUUSD\n"
-f"💰 Prix : {prix}\n"
-f"✅ TP : {tp}\n"
-f"❌ SL : {sl}\n"
-f"📊 Ratio R/R : 1:2"
-)
+        # CALCUL EN DOLLARS (2 lots)
+        sl_dollars = sl_points * 20
+        tp1_dollars = tp1_points * 20
+        tp2_dollars = tp2_points * 20
 
-envoyer_telegram(message)
-return jsonify({"statut": "ok"}), 200
-except Exception as e:
-return jsonify({"erreur": str(e)}), 500
+        message = (
+            f"{emoji} SIGNAL {signal} XAUUSD\n"
+            f"💰 Entrée : {prix}\n"
+            f"❌ SL : {sl} (-{sl_points} pts / -{sl_dollars}$)\n"
+            f"✅ TP1 : {tp1} (+{tp1_points} pts / +{tp1_dollars}$)\n"
+            f"✅ TP2 : {tp2} (+{tp2_points} pts / +{tp2_dollars}$)\n"
+            f"📊 Ratio R/R : 1:2\n"
+            f"⚠️ Risque : -{sl_dollars}$ max\n"
+            f"🕐 Heure UTC : {heure_utc}h"
+        )
+
+        envoyer_telegram(message)
+        return jsonify({"statut": "ok"}), 200
+    except Exception as e:
+        return jsonify({"erreur": str(e)}), 500
 
 @app.route("/test", methods=["GET"])
 def test():
-envoyer_telegram("Bot Gold actif !")
-return jsonify({"statut": "ok"}), 200
-
-@app.route("/", methods=["GET"])
-def maison():
-return jsonify({"statut": "en ligne"}), 200
-
-if __name__ == "__main__":
-app.run(host="0.0.0.0", port=PORT, debug=False)
+    envoyer_telegram("Bot Gold actif !")
+    return jsonify({"statut": "ok"}​​​​​​​​​​​​​​​​
